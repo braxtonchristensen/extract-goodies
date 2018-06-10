@@ -36,7 +36,7 @@ program
 
     walker.on('error', (root, stats, next) => {
       stats.forEach(function (n) {
-        console.error('[ERROR] ' + n.name)
+        console.error('[ERROR] ' + n.name);
         console.error(n.error.message || (n.error.code + ': ' + n.error.path));
       });
       next();

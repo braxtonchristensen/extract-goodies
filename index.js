@@ -6,6 +6,8 @@ const walk = require('walk');
 const readChunk = require('read-chunk');
 const fileType = require('file-type');
 const fs = require('fs');
+const { makeGreen, makeRed } = require('./colorize');
+
 const acceptedMimeTypes = [
   'image/jpeg',
   'image/png',
@@ -13,29 +15,72 @@ const acceptedMimeTypes = [
   'video/mpeg'
 ];
 
+const updateFileName = (target) => {
+  const pathArr = target.split('/');
+  const fileName = pathArr.slice(-1)[0].split('.');
+  fileName.splice(fileName.length - 1, 0, ` ${Date.now()}.`);
+  const newFileName = fileName.join('');
+  pathArr.pop();
+
+  return [...pathArr, newFileName].join('/');
+}
+
+const writeFile = ({path, target, file}) => {
+  fs.createReadStream(path)
+    .pipe(fs.createWriteStream(target));
+
+  console.log(makeGreen(`Extracting ${file.name}`));
+}
+
+const handleExisting = (writeOptions, {overwrite, keep}) => {
+  if (keep) {
+    const { target, ...rest } = writeOptions;
+    return writeFile({target: updateFileName(target), ...rest})
+  }
+  if (overwrite) {
+    return writeFile(writeOptions);
+  }
+
+  console.log(makeRed(`${writeOptions.file.name} exists, skipping for now.`));
+}
+
 program
   .version('0.0.1')
-  .command('extract <dir> <output>')
-  .action((dir, output) => {
-    const abs = path.resolve(process.cwd(), dir);
+  .command('extract <input> <output>')
+  .option('-o, --overwrite', 'Overwrite duplicates')
+  .option('-k, --keep', 'Keep duplicates')
+  .action((input, output, cmd) => {
+    const abs = path.resolve(process.cwd(), input);
     const walker = walk.walk(abs);
-    const target = fs.mkdirSync(path.resolve(process.cwd(), output));
+    if (!fs.existsSync(path.resolve(process.cwd(), output))) {
+      fs.mkdirSync(path.resolve(process.cwd(), output));
+    }
 
     walker.on('file', (root, file, next) => {
+      const target = path.resolve(process.cwd(), output, file.name);
       const filePath = path.resolve(root, file.name);
       const buffer = readChunk.sync(filePath, 0, 262);
       const type = fileType(buffer);
-      if (type !== null && acceptedMimeTypes.indexOf(type.mime) !== -1) {
-        fs.createReadStream(filePath)
-          .pipe(fs.createWriteStream(path.resolve(process.cwd(), output, file.name)));
+      const exists = fs.existsSync(target);
+      const writeOptions = {
+        file,
+        target,
+        path: filePath,
+      };
 
-        console.log(`Extracting ${file.name}`);
+      if (type !== null && acceptedMimeTypes.indexOf(type.mime) !== -1) {
+        if (exists) {
+          handleExisting(writeOptions, cmd);
+          return next();
+        }
+
+        writeFile(writeOptions);
       }
       next();
     });
 
     walker.on('error', (root, stats, next) => {
-      stats.forEach(function (n) {
+      stats.forEach((n) => {
         console.error('[ERROR] ' + n.name);
         console.error(n.error.message || (n.error.code + ': ' + n.error.path));
       });

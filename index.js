@@ -46,7 +46,7 @@ const handleExisting = (writeOptions, {overwrite, keep}) => {
 
 program
   .version('0.0.1')
-  .command('extract <input> <output>')
+  .command('imgs <input> <output>')
   .option('-o, --overwrite', 'Overwrite duplicates')
   .option('-k, --keep', 'Keep duplicates')
   .action((input, output, cmd) => {
